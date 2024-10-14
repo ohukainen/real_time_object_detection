@@ -9,9 +9,9 @@ find_package(OpenCV CONFIG REQUIRED)
 add_executable(${PROJECT_NAME} 
     src/main.cpp
     
-    #src/camera.cpp
+    src/InputCamera.cpp
 )
 
 
-# target_include_directories(${PROJECT_NAME} PRIVATE include)
+target_include_directories(${PROJECT_NAME} PRIVATE include)
 target_link_libraries(${PROJECT_NAME} opencv::opencv)
