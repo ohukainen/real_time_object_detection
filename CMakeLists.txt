@@ -10,8 +10,7 @@ add_executable(${PROJECT_NAME}
     src/main.cpp
     
     src/InputCamera.cpp
-    src/ModelONNX.cpp
-    src/Inference.cpp
+    src/ModelYOLOv8.cpp
 )
 
 

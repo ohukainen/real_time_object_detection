@@ -1,28 +1,43 @@
-#include "Inference.hpp"
+#include "ModelYOLOv8.hpp"
 
-Inference::Inference(const std::string &onnxModelPath, const cv::Size &modelInputShape, const std::string &classesTxtFile, const bool &runWithCuda)
+#include <random>
+
+#include <opencv2/opencv.hpp>
+
+ModelYOLOv8::ModelYOLOv8(const std::string &onnxModelPath, const cv::Size &modelInputShape, const bool &runWithCuda) 
+: mModelPath(onnxModelPath), mModelShape(modelInputShape), mCudaEnabled(runWithCuda) 
 {
-    modelPath = onnxModelPath;
-    modelShape = modelInputShape;
-    classesPath = classesTxtFile;
-    cudaEnabled = runWithCuda;
-
-    loadOnnxNetwork();
-    // loadClassesFromFile(); The classes are hard-coded for this example
+    mNet = cv::dnn::readNetFromONNX(mModelPath);
+    if (mCudaEnabled)
+    {
+        std::cout << "\nRunning on CUDA" << std::endl;
+        mNet.setPreferableBackend(cv::dnn::DNN_BACKEND_CUDA);
+        mNet.setPreferableTarget(cv::dnn::DNN_TARGET_CUDA);
+    }
+    else
+    {
+        std::cout << "\nRunning on CPU" << std::endl;
+        mNet.setPreferableBackend(cv::dnn::DNN_BACKEND_OPENCV);
+        mNet.setPreferableTarget(cv::dnn::DNN_TARGET_CPU);
+    }
 }
 
-std::vector<Detection> Inference::runInference(const cv::Mat &input)
+bool ModelYOLOv8::isLoaded() {
+    return !mNet.empty();
+}
+
+std::vector<Detection> ModelYOLOv8::applyModel(const cv::Mat &input)
 {
     cv::Mat modelInput = input;
-    if (letterBoxForSquare && modelShape.width == modelShape.height)
+    if (mLetterBoxForSquare && mModelShape.width == mModelShape.height)
         modelInput = formatToSquare(modelInput);
 
     cv::Mat blob;
-    cv::dnn::blobFromImage(modelInput, blob, 1.0/255.0, modelShape, cv::Scalar(), true, false);
-    net.setInput(blob);
+    cv::dnn::blobFromImage(modelInput, blob, 1.0/255.0, mModelShape, cv::Scalar(), true, false);
+    mNet.setInput(blob);
 
     std::vector<cv::Mat> outputs;
-    net.forward(outputs, net.getUnconnectedOutLayersNames());
+    mNet.forward(outputs, mNet.getUnconnectedOutLayersNames());
 
     int rows = outputs[0].size[1];
     int dimensions = outputs[0].size[2];
@@ -41,8 +56,8 @@ std::vector<Detection> Inference::runInference(const cv::Mat &input)
     }
     float *data = (float *)outputs[0].data;
 
-    float x_factor = modelInput.cols / modelShape.width;
-    float y_factor = modelInput.rows / modelShape.height;
+    float x_factor = modelInput.cols / mModelShape.width;
+    float y_factor = modelInput.rows / mModelShape.height;
 
     std::vector<int> class_ids;
     std::vector<float> confidences;
@@ -54,13 +69,13 @@ std::vector<Detection> Inference::runInference(const cv::Mat &input)
         {
             float *classes_scores = data+4;
 
-            cv::Mat scores(1, classes.size(), CV_32FC1, classes_scores);
+            cv::Mat scores(1, mClasses.size(), CV_32FC1, classes_scores);
             cv::Point class_id;
             double maxClassScore;
 
             minMaxLoc(scores, 0, &maxClassScore, 0, &class_id);
 
-            if (maxClassScore > modelScoreThreshold)
+            if (maxClassScore > mModelScoreThreshold)
             {
                 confidences.push_back(maxClassScore);
                 class_ids.push_back(class_id.x);
@@ -83,17 +98,17 @@ std::vector<Detection> Inference::runInference(const cv::Mat &input)
         {
             float confidence = data[4];
 
-            if (confidence >= modelConfidenceThreshold)
+            if (confidence >= mModelConfidenceThreshold)
             {
                 float *classes_scores = data+5;
 
-                cv::Mat scores(1, classes.size(), CV_32FC1, classes_scores);
+                cv::Mat scores(1, mClasses.size(), CV_32FC1, classes_scores);
                 cv::Point class_id;
                 double max_class_score;
 
                 minMaxLoc(scores, 0, &max_class_score, 0, &class_id);
 
-                if (max_class_score > modelScoreThreshold)
+                if (max_class_score > mModelScoreThreshold)
                 {
                     confidences.push_back(confidence);
                     class_ids.push_back(class_id.x);
@@ -118,7 +133,7 @@ std::vector<Detection> Inference::runInference(const cv::Mat &input)
     }
 
     std::vector<int> nms_result;
-    cv::dnn::NMSBoxes(boxes, confidences, modelScoreThreshold, modelNMSThreshold, nms_result);
+    cv::dnn::NMSBoxes(boxes, confidences, mModelScoreThreshold, mModelNMSThreshold, nms_result);
 
     std::vector<Detection> detections{};
     for (unsigned long i = 0; i < nms_result.size(); ++i)
@@ -136,7 +151,7 @@ std::vector<Detection> Inference::runInference(const cv::Mat &input)
                                   dis(gen),
                                   dis(gen));
 
-        result.className = classes[result.class_id];
+        result.className = mClasses[result.class_id];
         result.box = boxes[idx];
 
         detections.push_back(result);
@@ -145,36 +160,28 @@ std::vector<Detection> Inference::runInference(const cv::Mat &input)
     return detections;
 }
 
-void Inference::loadClassesFromFile()
-{
-    std::ifstream inputFile(classesPath);
-    if (inputFile.is_open())
+void ModelYOLOv8::drawDetections(cv::Mat& frame, const std::vector<Detection>& detections) {
+    int detectionsSize = detections.size();
+
+    for (auto & detection : detections)
     {
-        std::string classLine;
-        while (std::getline(inputFile, classLine))
-            classes.push_back(classLine);
-        inputFile.close();
+        cv::Rect box = detection.box;
+        cv::Scalar color = detection.color;
+
+        // Detection box
+        cv::rectangle(frame, box, color, 2);
+
+        // Detection box text
+        std::string classString = detection.className + ' ' + std::to_string(detection.confidence).substr(0, 4);
+        cv::Size textSize = cv::getTextSize(classString, cv::FONT_HERSHEY_DUPLEX, 1, 2, 0);
+        cv::Rect textBox(box.x, box.y - 40, textSize.width + 10, textSize.height + 20);
+
+        cv::rectangle(frame, textBox, color, cv::FILLED);
+        cv::putText(frame, classString, cv::Point(box.x + 5, box.y - 10), cv::FONT_HERSHEY_DUPLEX, 1, cv::Scalar(0, 0, 0), 2, 0);
     }
 }
 
-void Inference::loadOnnxNetwork()
-{
-    net = cv::dnn::readNetFromONNX(modelPath);
-    if (cudaEnabled)
-    {
-        std::cout << "\nRunning on CUDA" << std::endl;
-        net.setPreferableBackend(cv::dnn::DNN_BACKEND_CUDA);
-        net.setPreferableTarget(cv::dnn::DNN_TARGET_CUDA);
-    }
-    else
-    {
-        std::cout << "\nRunning on CPU" << std::endl;
-        net.setPreferableBackend(cv::dnn::DNN_BACKEND_OPENCV);
-        net.setPreferableTarget(cv::dnn::DNN_TARGET_CPU);
-    }
-}
-
-cv::Mat Inference::formatToSquare(const cv::Mat &source)
+cv::Mat ModelYOLOv8::formatToSquare(const cv::Mat &source)
 {
     int col = source.cols;
     int row = source.rows;
