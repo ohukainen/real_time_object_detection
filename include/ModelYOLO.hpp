@@ -9,10 +9,10 @@ struct Detection
     cv::Rect box{};
 };
 
-class ModelYOLOv8 : public Model {
+class ModelYOLO : public Model {
 public:
-    ModelYOLOv8(const std::string &onnxModelPath, const cv::Size &modelInputShape = {640, 640}, const bool &runWithCuda = true);
-    ~ModelYOLOv8() = default;
+    ModelYOLO(const std::string &onnxModelPath, const cv::Size &modelInputShape = {640, 640}, const bool &runWithCuda = true);
+    ~ModelYOLO() = default;
 
     bool isLoaded() override;
     std::vector<Detection> applyModel(const cv::Mat &input) override;
@@ -22,7 +22,7 @@ private:
     cv::Mat formatToSquare(const cv::Mat &source);
 
     std::string mModelPath;
-    std::string mClassesPath;
+    cv::Size2f mModelInputShape;
     bool mCudaEnabled;
 
     std::vector<std::string> mClasses{"person", "bicycle", "car", "motorcycle", "airplane", "bus", "train", "truck", 
@@ -38,13 +38,10 @@ private:
                                         "refrigerator", "book", "clock", "vase", "scissors", "teddy bear", 
                                         "hair drier", "toothbrush"};
 
-    cv::Size2f mModelShape{};
-
+    // TODO: Make not hardcoded:
     float mModelConfidenceThreshold {0.25};
     float mModelScoreThreshold      {0.45};
     float mModelNMSThreshold        {0.50};
-
-    bool mLetterBoxForSquare = true;
 
     cv::dnn::Net mNet;
 

@@ -1,5 +1,5 @@
 #include "InputCamera.hpp"
-#include "ModelYOLOv8.hpp"
+#include "ModelYOLO.hpp"
 
 #include <iostream>
 #include <memory>
@@ -8,7 +8,7 @@
 
 int main(int argc, char** argv) {
     std::unique_ptr<Input> input = std::make_unique<InputCamera>(0);
-    std::unique_ptr<Model> model = std::make_unique<ModelYOLOv8>("C:\\projects\\real-time_object_detection\\models\\yolov8n.onnx", cv::Size(640, 640), false);
+    std::unique_ptr<Model> model = std::make_unique<ModelYOLO>("C:\\projects\\real-time_object_detection\\models\\yolov8n.onnx", cv::Size(640, 640), false);
 
     if (!input->inputWorking()) {
         std::cout << "Error: Unable to open the camera." << std::endl;
@@ -26,6 +26,8 @@ int main(int argc, char** argv) {
             std::cout << "Error: Unable to capture frame." << std::endl;
             break;
         }
+
+        cv::flipND(frame, frame, 1);
 
         std::vector<Detection> output = model->applyModel(frame);
 

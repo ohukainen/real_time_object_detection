@@ -1,11 +1,9 @@
-#include "ModelYOLOv8.hpp"
-
-#include <random>
+#include "ModelYOLO.hpp"
 
 #include <opencv2/opencv.hpp>
 
-ModelYOLOv8::ModelYOLOv8(const std::string &onnxModelPath, const cv::Size &modelInputShape, const bool &runWithCuda) 
-: mModelPath(onnxModelPath), mModelShape(modelInputShape), mCudaEnabled(runWithCuda) 
+ModelYOLO::ModelYOLO(const std::string& onnxModelPath, const cv::Size& modelInputShape, const bool& runWithCuda) 
+: mModelPath(onnxModelPath), mModelInputShape(modelInputShape), mCudaEnabled(runWithCuda) 
 {
     mNet = cv::dnn::readNetFromONNX(mModelPath);
     if (mCudaEnabled)
@@ -22,18 +20,19 @@ ModelYOLOv8::ModelYOLOv8(const std::string &onnxModelPath, const cv::Size &model
     }
 }
 
-bool ModelYOLOv8::isLoaded() {
+bool ModelYOLO::isLoaded() {
     return !mNet.empty();
 }
 
-std::vector<Detection> ModelYOLOv8::applyModel(const cv::Mat &input)
+std::vector<Detection> ModelYOLO::applyModel(const cv::Mat& input)
 {
     cv::Mat modelInput = input;
-    if (mLetterBoxForSquare && mModelShape.width == mModelShape.height)
+    if (mModelInputShape.width == mModelInputShape.height) {
         modelInput = formatToSquare(modelInput);
+    }
 
     cv::Mat blob;
-    cv::dnn::blobFromImage(modelInput, blob, 1.0/255.0, mModelShape, cv::Scalar(), true, false);
+    cv::dnn::blobFromImage(modelInput, blob, 1.0/255.0, mModelInputShape, cv::Scalar(), true, false);
     mNet.setInput(blob);
 
     std::vector<cv::Mat> outputs;
@@ -42,6 +41,7 @@ std::vector<Detection> ModelYOLOv8::applyModel(const cv::Mat &input)
     int rows = outputs[0].size[1];
     int dimensions = outputs[0].size[2];
 
+    // TODO: Add logic to infer yolov11
     bool yolov8 = false;
     // yolov5 has an output of shape (batchSize, 25200, 85) (Num classes + box[x,y,w,h] + confidence[c])
     // yolov8 has an output of shape (batchSize, 84,  8400) (Num classes + box[x,y,w,h])
@@ -56,8 +56,8 @@ std::vector<Detection> ModelYOLOv8::applyModel(const cv::Mat &input)
     }
     float *data = (float *)outputs[0].data;
 
-    float x_factor = modelInput.cols / mModelShape.width;
-    float y_factor = modelInput.rows / mModelShape.height;
+    float x_factor = modelInput.cols / mModelInputShape.width;
+    float y_factor = modelInput.rows / mModelInputShape.height;
 
     std::vector<int> class_ids;
     std::vector<float> confidences;
@@ -143,13 +143,9 @@ std::vector<Detection> ModelYOLOv8::applyModel(const cv::Mat &input)
         Detection result;
         result.class_id = class_ids[idx];
         result.confidence = confidences[idx];
-
-        std::random_device rd;
-        std::mt19937 gen(rd());
-        std::uniform_int_distribution<int> dis(100, 255);
-        result.color = cv::Scalar(dis(gen),
-                                  dis(gen),
-                                  dis(gen));
+        
+        // TODO: Decide colors in a more reasonable way
+        result.color = cv::Scalar(50, 50, 255);
 
         result.className = mClasses[result.class_id];
         result.box = boxes[idx];
@@ -160,7 +156,7 @@ std::vector<Detection> ModelYOLOv8::applyModel(const cv::Mat &input)
     return detections;
 }
 
-void ModelYOLOv8::drawDetections(cv::Mat& frame, const std::vector<Detection>& detections) {
+void ModelYOLO::drawDetections(cv::Mat& frame, const std::vector<Detection>& detections) {
     int detectionsSize = detections.size();
 
     for (auto & detection : detections)
@@ -181,7 +177,7 @@ void ModelYOLOv8::drawDetections(cv::Mat& frame, const std::vector<Detection>& d
     }
 }
 
-cv::Mat ModelYOLOv8::formatToSquare(const cv::Mat &source)
+cv::Mat ModelYOLO::formatToSquare(const cv::Mat &source)
 {
     int col = source.cols;
     int row = source.rows;

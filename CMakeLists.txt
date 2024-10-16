@@ -10,7 +10,7 @@ add_executable(${PROJECT_NAME}
     src/main.cpp
     
     src/InputCamera.cpp
-    src/ModelYOLOv8.cpp
+    src/ModelYOLO.cpp
 )
 
 
