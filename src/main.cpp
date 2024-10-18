@@ -10,7 +10,7 @@
 
 int main() {
     std::unique_ptr<Input> input = std::make_unique<InputCamera>(0);
-    std::unique_ptr<Model> model = std::make_unique<ModelYOLO>("C:\\projects\\real-time_object_detection\\models\\yolov8n.onnx");
+    std::unique_ptr<Model> model = std::make_unique<ModelYOLO>("C:\\projects\\real_time_object_detection\\models\\yolov8n.onnx");
 
     if (!input->inputWorking()) {
         std::cout << "Error: Unable to open the camera." << std::endl;
