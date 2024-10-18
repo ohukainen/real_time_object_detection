@@ -1,9 +1,79 @@
+// This file is part of a modified version of the Ultralytics project (https://github.com/ultralytics/ultralytics) 
+//
+// Modified by Johannes Källstad 2024-10-18
+// 
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+// 
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Affero General Public License for more details.
+// 
+// You should have received a copy of the GNU Affero General Public License
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
 #include "ModelYOLO.hpp"
 
 #include <opencv2/opencv.hpp>
 
-ModelYOLO::ModelYOLO(const std::string& onnxModelPath, const cv::Size& modelInputShape, const bool& runWithCuda) 
-: mModelPath(onnxModelPath), mModelInputShape(modelInputShape), mCudaEnabled(runWithCuda) 
+static cv::Scalar generateColorFromScalar(int scalar, float nClasses) {
+    float H = (scalar / nClasses) * 360.0f;
+    float S = 0.75f;  
+    float V = 0.75f; 
+
+    float C = V * S;
+    float X = C * (1 - std::fabs(fmod(H / 60.0, 2) - 1));
+    float m = V - C;
+    float r;
+    float g;
+    float b;
+
+    if (H >= 0 && H < 60) {
+        r = C;
+        g = X;
+        b = 0;
+    } 
+    else if (H >= 60 && H < 120) {
+        r = X;
+        g = C;
+        b = 0;
+    } 
+    else if (H >= 120 && H < 180) {
+        r = 0;
+        g = C;
+        b = X;
+    } 
+    else if (H >= 180 && H < 240) {
+        r = 0;
+        g = X;
+        b = C;
+    } 
+    else if (H >= 240 && H < 300) {
+        r = X;
+        g = 0;
+        b = C;
+    } 
+    else {
+        r = C;
+        g = 0;
+        b = X;
+    }
+
+    int R = static_cast<int>((r + m) * 255);
+    int G = static_cast<int>((g + m) * 255);
+    int B = static_cast<int>((b + m) * 255);
+
+    return cv::Scalar(B, G, R);
+}
+
+ModelYOLO::ModelYOLO(const std::string& onnxModelPath, const cv::Size& modelInputShape, const bool& runWithCuda,
+                     const float confidenceThreshold, const float scoreThreshold, const float NMSThreshold)
+: mModelPath(onnxModelPath), mModelInputShape(modelInputShape), mCudaEnabled(runWithCuda), 
+  mModelConfidenceThreshold(confidenceThreshold), mModelScoreThreshold(scoreThreshold), 
+  mModelNMSThreshold(NMSThreshold)
 {
     mNet = cv::dnn::readNetFromONNX(mModelPath);
     if (mCudaEnabled)
@@ -41,7 +111,6 @@ std::vector<Detection> ModelYOLO::applyModel(const cv::Mat& input)
     int rows = outputs[0].size[1];
     int dimensions = outputs[0].size[2];
 
-    // TODO: Add logic to infer yolov11
     bool yolov8 = false;
     // yolov5 has an output of shape (batchSize, 25200, 85) (Num classes + box[x,y,w,h] + confidence[c])
     // yolov8 has an output of shape (batchSize, 84,  8400) (Num classes + box[x,y,w,h])
@@ -56,10 +125,10 @@ std::vector<Detection> ModelYOLO::applyModel(const cv::Mat& input)
     }
     float *data = (float *)outputs[0].data;
 
-    float x_factor = modelInput.cols / mModelInputShape.width;
-    float y_factor = modelInput.rows / mModelInputShape.height;
+    float xFactor = modelInput.cols / mModelInputShape.width;
+    float yFactor = modelInput.rows / mModelInputShape.height;
 
-    std::vector<int> class_ids;
+    std::vector<int> classIds;
     std::vector<float> confidences;
     std::vector<cv::Rect> boxes;
 
@@ -67,29 +136,29 @@ std::vector<Detection> ModelYOLO::applyModel(const cv::Mat& input)
     {
         if (yolov8)
         {
-            float *classes_scores = data+4;
+            float *classesScores = data+4;
 
-            cv::Mat scores(1, mClasses.size(), CV_32FC1, classes_scores);
-            cv::Point class_id;
+            cv::Mat scores(1, mClasses.size(), CV_32FC1, classesScores);
+            cv::Point classId;
             double maxClassScore;
 
-            minMaxLoc(scores, 0, &maxClassScore, 0, &class_id);
+            minMaxLoc(scores, 0, &maxClassScore, 0, &classId);
 
             if (maxClassScore > mModelScoreThreshold)
             {
                 confidences.push_back(maxClassScore);
-                class_ids.push_back(class_id.x);
+                classIds.push_back(classId.x);
 
                 float x = data[0];
                 float y = data[1];
                 float w = data[2];
                 float h = data[3];
 
-                int left = int((x - 0.5 * w) * x_factor);
-                int top = int((y - 0.5 * h) * y_factor);
+                int left = int((x - 0.5 * w) * xFactor);
+                int top = int((y - 0.5 * h) * yFactor);
 
-                int width = int(w * x_factor);
-                int height = int(h * y_factor);
+                int width = int(w * xFactor);
+                int height = int(h * yFactor);
 
                 boxes.push_back(cv::Rect(left, top, width, height));
             }
@@ -100,29 +169,29 @@ std::vector<Detection> ModelYOLO::applyModel(const cv::Mat& input)
 
             if (confidence >= mModelConfidenceThreshold)
             {
-                float *classes_scores = data+5;
+                float *classesScores = data+5;
 
-                cv::Mat scores(1, mClasses.size(), CV_32FC1, classes_scores);
-                cv::Point class_id;
-                double max_class_score;
+                cv::Mat scores(1, mClasses.size(), CV_32FC1, classesScores);
+                cv::Point classId;
+                double maxClassScore;
 
-                minMaxLoc(scores, 0, &max_class_score, 0, &class_id);
+                minMaxLoc(scores, 0, &maxClassScore, 0, &classId);
 
-                if (max_class_score > mModelScoreThreshold)
+                if (maxClassScore > mModelScoreThreshold)
                 {
                     confidences.push_back(confidence);
-                    class_ids.push_back(class_id.x);
+                    classIds.push_back(classId.x);
 
                     float x = data[0];
                     float y = data[1];
                     float w = data[2];
                     float h = data[3];
 
-                    int left = int((x - 0.5 * w) * x_factor);
-                    int top = int((y - 0.5 * h) * y_factor);
+                    int left = int((x - 0.5 * w) * xFactor);
+                    int top = int((y - 0.5 * h) * yFactor);
 
-                    int width = int(w * x_factor);
-                    int height = int(h * y_factor);
+                    int width = int(w * xFactor);
+                    int height = int(h * yFactor);
 
                     boxes.push_back(cv::Rect(left, top, width, height));
                 }
@@ -132,22 +201,21 @@ std::vector<Detection> ModelYOLO::applyModel(const cv::Mat& input)
         data += dimensions;
     }
 
-    std::vector<int> nms_result;
-    cv::dnn::NMSBoxes(boxes, confidences, mModelScoreThreshold, mModelNMSThreshold, nms_result);
+    std::vector<int> nmsResult;
+    cv::dnn::NMSBoxes(boxes, confidences, mModelScoreThreshold, mModelNMSThreshold, nmsResult);
 
     std::vector<Detection> detections{};
-    for (unsigned long i = 0; i < nms_result.size(); ++i)
+    for (unsigned long i = 0; i < nmsResult.size(); ++i)
     {
-        int idx = nms_result[i];
+        int idx = nmsResult[i];
 
         Detection result;
-        result.class_id = class_ids[idx];
+        result.classId = classIds[idx];
         result.confidence = confidences[idx];
-        
-        // TODO: Decide colors in a more reasonable way
-        result.color = cv::Scalar(50, 50, 255);
 
-        result.className = mClasses[result.class_id];
+        result.color = generateColorFromScalar(result.classId, mClasses.size());
+
+        result.className = mClasses[result.classId];
         result.box = boxes[idx];
 
         detections.push_back(result);
@@ -181,8 +249,8 @@ cv::Mat ModelYOLO::formatToSquare(const cv::Mat &source)
 {
     int col = source.cols;
     int row = source.rows;
-    int _max = MAX(col, row);
-    cv::Mat result = cv::Mat::zeros(_max, _max, CV_8UC3);
+    int max = MAX(col, row);
+    cv::Mat result = cv::Mat::zeros(max, max, CV_8UC3);
     source.copyTo(result(cv::Rect(0, 0, col, row)));
     return result;
 }

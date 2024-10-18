@@ -1,17 +1,39 @@
+// This file is part of a modified version of the Ultralytics project (https://github.com/ultralytics/ultralytics)
+//
+// Modified by Johannes Källstad 2024-10-18
+// 
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+// 
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Affero General Public License for more details.
+// 
+// You should have received a copy of the GNU Affero General Public License
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
 #include "Model.hpp"
 
 struct Detection
 {
-    int class_id{0};
-    std::string className{};
-    float confidence{0.0};
-    cv::Scalar color{};
-    cv::Rect box{};
+    int classId;
+    std::string className;
+    float confidence;
+    cv::Scalar color;
+    cv::Rect box;
 };
 
 class ModelYOLO : public Model {
 public:
-    ModelYOLO(const std::string &onnxModelPath, const cv::Size &modelInputShape = {640, 640}, const bool &runWithCuda = true);
+    ModelYOLO(const std::string &onnxModelPath, 
+              const cv::Size &modelInputShape = {640, 640}, 
+              const bool &runWithCuda = false,
+              const float confidenceThreshold = 0.25,
+              const float scoreThreshold = 0.45,
+              const float NMSThreshold = 0.50);
     ~ModelYOLO() = default;
 
     bool isLoaded() override;
@@ -24,6 +46,9 @@ private:
     std::string mModelPath;
     cv::Size2f mModelInputShape;
     bool mCudaEnabled;
+    float mModelConfidenceThreshold;
+    float mModelScoreThreshold;
+    float mModelNMSThreshold;
 
     std::vector<std::string> mClasses{"person", "bicycle", "car", "motorcycle", "airplane", "bus", "train", "truck", 
                                         "boat", "traffic light", "fire hydrant", "stop sign", "parking meter", "bench",
@@ -38,11 +63,5 @@ private:
                                         "refrigerator", "book", "clock", "vase", "scissors", "teddy bear", 
                                         "hair drier", "toothbrush"};
 
-    // TODO: Make not hardcoded:
-    float mModelConfidenceThreshold {0.25};
-    float mModelScoreThreshold      {0.45};
-    float mModelNMSThreshold        {0.50};
-
     cv::dnn::Net mNet;
-
 };
