@@ -17,8 +17,7 @@
 
 #include "Model.hpp"
 
-struct Detection
-{
+struct Detection {
     int classId;
     std::string className;
     float confidence;
