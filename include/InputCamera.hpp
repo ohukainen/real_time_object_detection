@@ -2,8 +2,6 @@
 
 #include "Input.hpp"
 
-#include <opencv2/opencv.hpp>
-
 class InputCamera : public Input {
 public:
     InputCamera(int device);
