@@ -7,7 +7,6 @@
 #include <memory>
 
 #include <opencv2/opencv.hpp>
-#include <ostream>
 
 struct Args {
     std::string modelPath;
