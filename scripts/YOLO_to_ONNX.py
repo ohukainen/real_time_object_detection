@@ -7,4 +7,4 @@ model_name = "yolov8n.pt"
 model = YOLO(model_name)
 
 # Export the model to ONNX format
-model.export(format="onnx")  # creates 'yolo11n.onnx'
+model.export(format="onnx")  # creates 'yolov8n.onnx'

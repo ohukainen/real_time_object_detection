@@ -4,8 +4,17 @@
 
 class Input {
 public:
-    virtual ~Input() = default;
+    Input(int device);
+    Input(const std::string& device);
 
-    virtual bool inputWorking() = 0;
-    virtual bool getFrame(cv::Mat& frame) = 0;
+    ~Input() = default;
+
+    bool capturing();
+    bool getFrame(cv::Mat& frame);
+
+    bool isVideo() const {return mIsVideo;};
+
+private:
+    cv::VideoCapture mCap;
+    bool mIsVideo;
 };
