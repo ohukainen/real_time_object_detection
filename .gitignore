@@ -7,6 +7,9 @@ models/
 *.pt
 *.onnx
 
+# Input 
+input/
+
 # LSP related
 compile_commands.json
 .cache

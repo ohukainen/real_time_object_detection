@@ -9,10 +9,11 @@ find_package(OpenCV CONFIG REQUIRED)
 add_executable(${PROJECT_NAME} 
     src/main.cpp
     
-    src/InputCamera.cpp
+    src/Input.cpp
     src/ModelYOLO.cpp
 )
 
+set_property(TARGET ${PROJECT_NAME} PROPERTY CXX_STANDARD 20)
 
 target_include_directories(${PROJECT_NAME} PRIVATE include)
 target_link_libraries(${PROJECT_NAME} opencv::opencv)
