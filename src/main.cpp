@@ -3,6 +3,7 @@
 #include "ModelYOLO.hpp"
 
 #include <exception>
+#include <format>
 #include <iostream>
 #include <memory>
 
@@ -13,6 +14,7 @@ struct Args {
     int deviceNr = -1;
     std::string videoPath;
     float scalefactor;
+    bool rescale = false;
 };
 
 static void usage() {
@@ -68,7 +70,16 @@ static Args parseArgs(int argc, char* argv[]) {
             if (std::next(it) == inputs.end() || (it + 1)->starts_with("-")) {
                 throw std::runtime_error("missing argument for scalefactor.");
             }
-            args.scalefactor = std::stof((*++it).data());
+            float scalefactor = std::stof((*++it).data());
+            if (scalefactor < 0.1f || scalefactor > 3.0f) {
+                throw std::runtime_error("scalefactor has to be between 0.1 and 3.0.");
+            }
+            args.scalefactor = scalefactor;
+            args.rescale = true;
+        }
+        else {
+            throw std::runtime_error(std::format("recieved unknown argument not linked to any flag: {}.", arg));
+
         }
     }
 
@@ -78,10 +89,6 @@ static Args parseArgs(int argc, char* argv[]) {
 
     if (args.deviceNr == -1 && args.videoPath.empty()) {
         args.deviceNr = 0;
-    }
-    
-    if (!args.scalefactor) {
-        args.scalefactor = 1.0f;
     }
 
     return args;
@@ -127,11 +134,6 @@ int main(int argc, char* argv[]) {
         return -1;
     }
 
-    bool rescale = true;
-    if (args.scalefactor != 1.0f) {
-        rescale = true;
-    }
-
     while (true) { 
         if (!input->getFrame(frame)) {
             if (input->isVideo()) {
@@ -148,7 +150,7 @@ int main(int argc, char* argv[]) {
 
         model->drawDetections(frame, output);
 
-        if (rescale) {
+        if (args.rescale) {
             resize(frame, frame, cv::Size(), args.scalefactor, args.scalefactor, cv::INTER_NEAREST);
         }
 
