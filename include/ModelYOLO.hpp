@@ -26,14 +26,15 @@ struct Detection {
     cv::Rect box;
 };
 
+struct ModelArgs {
+    std::string modelPath{}; 
+    std::string classesFilepath{}; 
+    bool runWithCuda = false;
+};
+
 class ModelYOLO : public Model {
 public:
-    ModelYOLO(const std::string &onnxModelPath, 
-              const cv::Size &modelInputShape = {640, 640}, 
-              const bool &runWithCuda = false,
-              const float confidenceThreshold = 0.25,
-              const float scoreThreshold = 0.45,
-              const float NMSThreshold = 0.50);
+    ModelYOLO(const ModelArgs& args);
     ~ModelYOLO() = default;
 
     bool isLoaded() override;
@@ -44,11 +45,12 @@ private:
     cv::Mat formatToSquare(const cv::Mat &source);
 
     std::string mModelPath;
-    cv::Size2f mModelInputShape;
     bool mCudaEnabled;
-    float mModelConfidenceThreshold;
-    float mModelScoreThreshold;
-    float mModelNMSThreshold;
+
+    const cv::Size2f mModelInputShape = {640, 640};
+    const float mModelConfidenceThreshold = 0.25;
+    const float mModelScoreThreshold = 0.45;
+    const float mModelNMSThreshold = 0.50;
 
     std::vector<std::string> mClasses{"person", "bicycle", "car", "motorcycle", "airplane", "bus", "train", "truck", 
                                         "boat", "traffic light", "fire hydrant", "stop sign", "parking meter", "bench",
