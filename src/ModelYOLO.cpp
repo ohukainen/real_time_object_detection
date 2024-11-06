@@ -16,7 +16,9 @@
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include "ModelYOLO.hpp"
 
+#include <fstream>
 #include <opencv2/opencv.hpp>
+#include <nlohmann/json.hpp>
 
 static cv::Scalar generateColorFromScalar(int scalar, float nClasses) {
     float H = (scalar / nClasses) * 360.0f;
@@ -68,13 +70,11 @@ static cv::Scalar generateColorFromScalar(int scalar, float nClasses) {
     return cv::Scalar(B, G, R);
 }
 
-ModelYOLO::ModelYOLO(const std::string& onnxModelPath, const cv::Size& modelInputShape, const bool& runWithCuda,
-                     const float confidenceThreshold, const float scoreThreshold, const float NMSThreshold)
-: mModelPath(onnxModelPath), mModelInputShape(modelInputShape), mCudaEnabled(runWithCuda), 
-  mModelConfidenceThreshold(confidenceThreshold), mModelScoreThreshold(scoreThreshold), 
-  mModelNMSThreshold(NMSThreshold)
+ModelYOLO::ModelYOLO(const ModelArgs& args)
+: mModelPath(args.modelPath), mCudaEnabled(args.runWithCuda)
 {
     mNet = cv::dnn::readNetFromONNX(mModelPath);
+
     if (mCudaEnabled)
     {
         std::cout << "\nRunning on CUDA" << std::endl;
@@ -87,6 +87,29 @@ ModelYOLO::ModelYOLO(const std::string& onnxModelPath, const cv::Size& modelInpu
         mNet.setPreferableBackend(cv::dnn::DNN_BACKEND_OPENCV);
         mNet.setPreferableTarget(cv::dnn::DNN_TARGET_CPU);
     }
+
+    if (args.classfilePath.empty()) {
+        return;
+    }
+
+    std::fstream fs;
+    fs.open(args.classfilePath);
+    if (!fs.is_open()) {
+        throw std::runtime_error("unable to open classfile: " + args.classfilePath + ".");
+    }
+
+    nlohmann::json classesJson = nlohmann::json::parse(fs, nullptr, false);
+    if (!classesJson.contains("classes") ) {
+        throw std::runtime_error("classes object did not contain classes.");
+    }
+    if (!classesJson.at("classes").is_array()) {
+        throw std::runtime_error("classes object was not an array.");
+    }
+    if (classesJson.at("classes").empty()) {
+        throw std::runtime_error("classes object was not an array.");
+    }
+    
+    mClasses = classesJson.at("classes").get<std::vector<std::string>>(); 
 }
 
 bool ModelYOLO::isLoaded() {
@@ -95,37 +118,24 @@ bool ModelYOLO::isLoaded() {
 
 std::vector<Detection> ModelYOLO::applyModel(const cv::Mat& input)
 {
-    cv::Mat modelInput = input;
-    if (mModelInputShape.width == mModelInputShape.height) {
-        modelInput = formatToSquare(modelInput);
-    }
+    cv::Mat modelInput = formatToSquare(input);
 
     cv::Mat blob;
-    cv::dnn::blobFromImage(modelInput, blob, 1.0/255.0, mModelInputShape, cv::Scalar(), true, false);
+    cv::dnn::blobFromImage(modelInput, blob, 1.0/255.0, mInputShape, cv::Scalar(), true, false);
     mNet.setInput(blob);
 
     std::vector<cv::Mat> outputs;
     mNet.forward(outputs, mNet.getUnconnectedOutLayersNames());
 
-    int rows = outputs[0].size[1];
-    int dimensions = outputs[0].size[2];
+    int rows = outputs[0].size[2];
+    int dimensions = outputs[0].size[1];
 
-    bool yolov8 = false;
-    // yolov5 has an output of shape (batchSize, 25200, 85) (Num classes + box[x,y,w,h] + confidence[c])
-    // yolov8 has an output of shape (batchSize, 84,  8400) (Num classes + box[x,y,w,h])
-    if (dimensions > rows) // Check if the shape[2] is more than shape[1] (yolov8)
-    {
-        yolov8 = true;
-        rows = outputs[0].size[2];
-        dimensions = outputs[0].size[1];
-
-        outputs[0] = outputs[0].reshape(1, dimensions);
-        cv::transpose(outputs[0], outputs[0]);
-    }
+    outputs[0] = outputs[0].reshape(1, dimensions);
+    cv::transpose(outputs[0], outputs[0]);
     float *data = (float *)outputs[0].data;
 
-    float xFactor = modelInput.cols / mModelInputShape.width;
-    float yFactor = modelInput.rows / mModelInputShape.height;
+    float xFactor = modelInput.cols / mInputShape.width;
+    float yFactor = modelInput.rows / mInputShape.height;
 
     std::vector<int> classIds;
     std::vector<float> confidences;
@@ -133,75 +143,38 @@ std::vector<Detection> ModelYOLO::applyModel(const cv::Mat& input)
 
     for (int i = 0; i < rows; ++i)
     {
-        if (yolov8)
+        float *classesScores = data+4;
+
+        cv::Mat scores(1, mClasses.size(), CV_32FC1, classesScores);
+        cv::Point classId;
+        double maxClassScore;
+
+        minMaxLoc(scores, 0, &maxClassScore, 0, &classId);
+
+        if (maxClassScore > mScoreThreshold)
         {
-            float *classesScores = data+4;
+            confidences.push_back(maxClassScore);
+            classIds.push_back(classId.x);
 
-            cv::Mat scores(1, mClasses.size(), CV_32FC1, classesScores);
-            cv::Point classId;
-            double maxClassScore;
+            float x = data[0];
+            float y = data[1];
+            float w = data[2];
+            float h = data[3];
 
-            minMaxLoc(scores, 0, &maxClassScore, 0, &classId);
+            int left = int((x - 0.5 * w) * xFactor);
+            int top = int((y - 0.5 * h) * yFactor);
 
-            if (maxClassScore > mModelScoreThreshold)
-            {
-                confidences.push_back(maxClassScore);
-                classIds.push_back(classId.x);
+            int width = int(w * xFactor);
+            int height = int(h * yFactor);
 
-                float x = data[0];
-                float y = data[1];
-                float w = data[2];
-                float h = data[3];
-
-                int left = int((x - 0.5 * w) * xFactor);
-                int top = int((y - 0.5 * h) * yFactor);
-
-                int width = int(w * xFactor);
-                int height = int(h * yFactor);
-
-                boxes.push_back(cv::Rect(left, top, width, height));
-            }
-        }
-        else // yolov5
-        {
-            float confidence = data[4];
-
-            if (confidence >= mModelConfidenceThreshold)
-            {
-                float *classesScores = data+5;
-
-                cv::Mat scores(1, mClasses.size(), CV_32FC1, classesScores);
-                cv::Point classId;
-                double maxClassScore;
-
-                minMaxLoc(scores, 0, &maxClassScore, 0, &classId);
-
-                if (maxClassScore > mModelScoreThreshold)
-                {
-                    confidences.push_back(confidence);
-                    classIds.push_back(classId.x);
-
-                    float x = data[0];
-                    float y = data[1];
-                    float w = data[2];
-                    float h = data[3];
-
-                    int left = int((x - 0.5 * w) * xFactor);
-                    int top = int((y - 0.5 * h) * yFactor);
-
-                    int width = int(w * xFactor);
-                    int height = int(h * yFactor);
-
-                    boxes.push_back(cv::Rect(left, top, width, height));
-                }
-            }
+            boxes.push_back(cv::Rect(left, top, width, height));
         }
 
         data += dimensions;
     }
 
     std::vector<int> nmsResult;
-    cv::dnn::NMSBoxes(boxes, confidences, mModelScoreThreshold, mModelNMSThreshold, nmsResult);
+    cv::dnn::NMSBoxes(boxes, confidences, mScoreThreshold, mNMSThreshold, nmsResult);
 
     std::vector<Detection> detections{};
     for (unsigned long i = 0; i < nmsResult.size(); ++i)
@@ -244,12 +217,19 @@ void ModelYOLO::drawDetections(cv::Mat& frame, const std::vector<Detection>& det
     }
 }
 
-cv::Mat ModelYOLO::formatToSquare(const cv::Mat &source)
+cv::Mat ModelYOLO::formatToSquare(const cv::Mat& source)
 {
     int col = source.cols;
     int row = source.rows;
     int max = MAX(col, row);
-    cv::Mat result = cv::Mat::zeros(max, max, CV_8UC3);
-    source.copyTo(result(cv::Rect(0, 0, col, row)));
-    return result;
+
+    if (max < mInputSideLength) {
+        cv::Mat output = cv::Mat::zeros(mInputSideLength, mInputSideLength, CV_8UC3);
+        resize(source, output, mInputShape);
+        return output;
+    }
+
+    cv::Mat output = cv::Mat::zeros(max, max, CV_8UC3);
+    source.copyTo(output(cv::Rect(0, 0, col, row)));
+    return output;
 }

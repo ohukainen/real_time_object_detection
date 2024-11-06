@@ -8,6 +8,7 @@ class RTODRecipe(ConanFile):
 
     def requirements(self):
         self.requires("opencv/4.10.0")
+        self.requires("nlohmann_json/3.11.3")
 
     def layout(self):
         cmake_layout(self)

@@ -26,14 +26,15 @@ struct Detection {
     cv::Rect box;
 };
 
+struct ModelArgs {
+    std::string modelPath{}; 
+    std::string classfilePath{}; 
+    bool runWithCuda = false;
+};
+
 class ModelYOLO : public Model {
 public:
-    ModelYOLO(const std::string &onnxModelPath, 
-              const cv::Size &modelInputShape = {640, 640}, 
-              const bool &runWithCuda = false,
-              const float confidenceThreshold = 0.25,
-              const float scoreThreshold = 0.45,
-              const float NMSThreshold = 0.50);
+    ModelYOLO(const ModelArgs& args);
     ~ModelYOLO() = default;
 
     bool isLoaded() override;
@@ -41,14 +42,16 @@ public:
     void drawDetections(cv::Mat &frame, const std::vector<Detection>& detections) override; 
 
 private:
-    cv::Mat formatToSquare(const cv::Mat &source);
+    cv::Mat formatToSquare(const cv::Mat& source);
 
     std::string mModelPath;
-    cv::Size2f mModelInputShape;
     bool mCudaEnabled;
-    float mModelConfidenceThreshold;
-    float mModelScoreThreshold;
-    float mModelNMSThreshold;
+
+    const float mInputSideLength = 640;
+    const cv::Size2f mInputShape = {mInputSideLength, mInputSideLength};
+    const float mConfidenceThreshold = 0.25;
+    const float mScoreThreshold = 0.45;
+    const float mNMSThreshold = 0.50;
 
     std::vector<std::string> mClasses{"person", "bicycle", "car", "motorcycle", "airplane", "bus", "train", "truck", 
                                         "boat", "traffic light", "fire hydrant", "stop sign", "parking meter", "bench",
