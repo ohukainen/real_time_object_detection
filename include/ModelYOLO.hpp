@@ -28,7 +28,7 @@ struct Detection {
 
 struct ModelArgs {
     std::string modelPath{}; 
-    std::string classesFilepath{}; 
+    std::string classfilePath{}; 
     bool runWithCuda = false;
 };
 

@@ -18,11 +18,12 @@ struct Args {
 };
 
 static void usage() {
-    std::cout << "Usage: " << "real_time_object_detection --model-path <path> --classes-filepath [path] --devive-nr [nr] --video-path [path] --scale-factor [factor] --use-cuda\n" << std::endl;
+    std::cout << "Usage: " << std::endl;
+    std::cout << "real_time_object_detection --model-path <path> --classfile-path [path] --devive-nr [nr] --video-path [path] --scale-factor [factor] --use-cuda\n" << std::endl;
     std::cout << "Required <>:" << std::endl;
-    std::cout << "  --model-path    Path to the detection model.\n" << std::endl;
+    std::cout << "  --model-path        Path to the detection model.\n" << std::endl;
     std::cout << "Optional []:" << std::endl;
-    std::cout << "  --classes-filepath  Path to json file with classnames declared as an array with name classes." << std::endl;
+    std::cout << "  --classfile-path    Path to json file with classnames declared as an array with name classes." << std::endl;
     std::cout << "  --devive-nr         Camera source device nr, can't be provided together with --video-path." << std::endl;
     std::cout << "  --video-path        Path to video file, can't be provided together with --device-nr." << std::endl;
     std::cout << "  --scale-factor      Scale factor for output." << std::endl;
@@ -47,11 +48,11 @@ static Args parseArgs(int argc, char* argv[]) {
             }
             args.modelArgs.modelPath= *++it;
         }
-        else if (arg == "--classes-filepath") {
+        else if (arg == "--classfile-path") {
             if (std::next(it) == inputs.end() || (it + 1)->starts_with("-")) {
                 throw std::runtime_error("missing argument for classes filepath.");
             }
-            args.modelArgs.classesFilepath = *++it;
+            args.modelArgs.classfilePath = *++it;
         }
         else if (arg == "--device-nr") {
             if (std::next(it) == inputs.end() || (it + 1)->starts_with("-")) {

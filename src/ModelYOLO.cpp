@@ -88,14 +88,14 @@ ModelYOLO::ModelYOLO(const ModelArgs& args)
         mNet.setPreferableTarget(cv::dnn::DNN_TARGET_CPU);
     }
 
-    if (args.classesFilepath.empty()) {
+    if (args.classfilePath.empty()) {
         return;
     }
 
     std::fstream fs;
-    fs.open(args.classesFilepath);
+    fs.open(args.classfilePath);
     if (!fs.is_open()) {
-        throw std::runtime_error("unable to open class filepath: " + args.classesFilepath + ".");
+        throw std::runtime_error("unable to open classfile: " + args.classfilePath + ".");
     }
 
     nlohmann::json classesJson = nlohmann::json::parse(fs, nullptr, false);
