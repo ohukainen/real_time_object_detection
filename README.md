@@ -18,5 +18,19 @@ If unfamiliar with conan basic usage, see [documantation](https://docs.conan.io/
 # Scripts 
 To create the yolov8n.onnx file run the [YOLO_to_ONNX script](scripts/YOLO_to_ONNX.py). 
 
+# Classes json format 
+The optional json file that defines the classes used should have the following format: 
+```json
+{
+    "classes" : [ 
+        "Class_1",
+        "Class_2", 
+        "Class_3",
+        ...
+        "Class_N"
+    ]
+}
+```
+
 # Notice 
 Parts of this project is based on examples from the [Ultralytics GitHub page](https://github.com/ultralytics/ultralytics), notices can be found in relevant files.  

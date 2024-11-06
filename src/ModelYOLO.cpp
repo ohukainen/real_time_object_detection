@@ -118,13 +118,10 @@ bool ModelYOLO::isLoaded() {
 
 std::vector<Detection> ModelYOLO::applyModel(const cv::Mat& input)
 {
-    cv::Mat modelInput = input;
-    if (mModelInputShape.width == mModelInputShape.height) {
-        modelInput = formatToSquare(modelInput);
-    }
+    cv::Mat modelInput = formatToSquare(input);
 
     cv::Mat blob;
-    cv::dnn::blobFromImage(modelInput, blob, 1.0/255.0, mModelInputShape, cv::Scalar(), true, false);
+    cv::dnn::blobFromImage(modelInput, blob, 1.0/255.0, mInputShape, cv::Scalar(), true, false);
     mNet.setInput(blob);
 
     std::vector<cv::Mat> outputs;
@@ -137,8 +134,8 @@ std::vector<Detection> ModelYOLO::applyModel(const cv::Mat& input)
     cv::transpose(outputs[0], outputs[0]);
     float *data = (float *)outputs[0].data;
 
-    float xFactor = modelInput.cols / mModelInputShape.width;
-    float yFactor = modelInput.rows / mModelInputShape.height;
+    float xFactor = modelInput.cols / mInputShape.width;
+    float yFactor = modelInput.rows / mInputShape.height;
 
     std::vector<int> classIds;
     std::vector<float> confidences;
@@ -154,7 +151,7 @@ std::vector<Detection> ModelYOLO::applyModel(const cv::Mat& input)
 
         minMaxLoc(scores, 0, &maxClassScore, 0, &classId);
 
-        if (maxClassScore > mModelScoreThreshold)
+        if (maxClassScore > mScoreThreshold)
         {
             confidences.push_back(maxClassScore);
             classIds.push_back(classId.x);
@@ -177,7 +174,7 @@ std::vector<Detection> ModelYOLO::applyModel(const cv::Mat& input)
     }
 
     std::vector<int> nmsResult;
-    cv::dnn::NMSBoxes(boxes, confidences, mModelScoreThreshold, mModelNMSThreshold, nmsResult);
+    cv::dnn::NMSBoxes(boxes, confidences, mScoreThreshold, mNMSThreshold, nmsResult);
 
     std::vector<Detection> detections{};
     for (unsigned long i = 0; i < nmsResult.size(); ++i)
@@ -220,12 +217,19 @@ void ModelYOLO::drawDetections(cv::Mat& frame, const std::vector<Detection>& det
     }
 }
 
-cv::Mat ModelYOLO::formatToSquare(const cv::Mat &source)
+cv::Mat ModelYOLO::formatToSquare(const cv::Mat& source)
 {
     int col = source.cols;
     int row = source.rows;
     int max = MAX(col, row);
-    cv::Mat result = cv::Mat::zeros(max, max, CV_8UC3);
-    source.copyTo(result(cv::Rect(0, 0, col, row)));
-    return result;
+
+    if (max < mInputSideLength) {
+        cv::Mat output = cv::Mat::zeros(mInputSideLength, mInputSideLength, CV_8UC3);
+        resize(source, output, mInputShape);
+        return output;
+    }
+
+    cv::Mat output = cv::Mat::zeros(max, max, CV_8UC3);
+    source.copyTo(output(cv::Rect(0, 0, col, row)));
+    return output;
 }
