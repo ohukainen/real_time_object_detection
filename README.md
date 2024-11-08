@@ -10,7 +10,8 @@ Johannes Källstad [EMail](johannes.kallstad@gmail.com) [GitHub](https://github.
 - [Conan](https://conan.io/)
 - [CMake](https://cmake.org/)
 - [OpenCV](https://opencv.org/)
-- [Ultralytics](https://www.ultralytics.com/) 
+- [Ultralytics](https://www.ultralytics.com/)
+- [JSON for Modern C++](https://json.nlohmann.me/)
 
 # Build
 If unfamiliar with conan basic usage, see [documantation](https://docs.conan.io/2/tutorial/consuming_packages/build_simple_cmake_project.html).
