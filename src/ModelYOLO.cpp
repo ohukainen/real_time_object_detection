@@ -225,7 +225,7 @@ cv::Mat ModelYOLO::formatToSquare(const cv::Mat& source)
 
     if (max < mInputSideLength) {
         cv::Mat output = cv::Mat::zeros(mInputSideLength, mInputSideLength, CV_8UC3);
-        resize(source, output, mInputShape);
+        source.copyTo(output(cv::Rect(0, 0, col, row)));
         return output;
     }
 
